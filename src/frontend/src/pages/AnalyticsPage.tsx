@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useOrders } from "../hooks/useQueries";
 
 const C = {
   primary: "#8B1A1A",
@@ -25,22 +26,6 @@ const MONTH_NAMES = [
 ];
 const DAY_NAMES = ["S", "M", "T", "W", "T", "F", "S"];
 
-const BARS = [
-  { time: "11 AM", val: 28 },
-  { time: "12 PM", val: 45 },
-  { time: "1 PM", val: 52 },
-  { time: "2 PM", val: 38 },
-  { time: "3 PM", val: 65 },
-  { time: "4 PM", val: 58 },
-  { time: "5 PM", val: 71 },
-  { time: "6 PM", val: 82 },
-  { time: "7 PM", val: 75 },
-  { time: "8 PM", val: 60 },
-  { time: "9 PM", val: 42 },
-  { time: "10 PM", val: 28 },
-];
-const MAX_BAR = Math.max(...BARS.map((b) => b.val));
-
 export default function AnalyticsPage() {
   const today = new Date();
   const [currentDate, setCurrentDate] = useState(
@@ -51,6 +36,34 @@ export default function AnalyticsPage() {
   const month = currentDate.getMonth();
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const { data: orders = [], isLoading } = useOrders();
+
+  const paidOrders = orders.filter((o) => o.paymentStatus === "Paid");
+
+  const totalOrders = paidOrders.length;
+
+  const totalRevenue = paidOrders.reduce((sum, order) => {
+    return (
+      sum +
+      order.items.reduce((s, item) => s + item.price * Number(item.qty), 0)
+    );
+  }, 0);
+
+  // Most ordered item
+  const itemQtyMap: Record<string, number> = {};
+  for (const order of paidOrders) {
+    for (const item of order.items) {
+      itemQtyMap[item.name] = (itemQtyMap[item.name] || 0) + Number(item.qty);
+    }
+  }
+  const mostOrderedEntry = Object.entries(itemQtyMap).sort(
+    (a, b) => b[1] - a[1],
+  )[0];
+  const mostOrderedName = mostOrderedEntry?.[0] ?? null;
+  const mostOrderedQty = mostOrderedEntry?.[1] ?? 0;
+
+  const hasData = totalOrders > 0;
 
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "18px 16px" }}>
@@ -186,13 +199,11 @@ export default function AnalyticsPage() {
             </div>
           ))}
 
-          {/* Empty cells for first week */}
           {Array.from({ length: firstDay }, (_, i) => {
             // biome-ignore lint/suspicious/noArrayIndexKey: calendar spacers have no meaningful key
             return <div key={`spacer-${i}`} />;
           })}
 
-          {/* Day cells */}
           {Array.from({ length: daysInMonth }).map((_, i) => {
             const day = i + 1;
             const isToday =
@@ -220,30 +231,178 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 10,
-          marginBottom: 14,
-        }}
-      >
-        {[
-          {
-            label: "TOTAL ORDERS",
-            value: "1,284",
-            delta: "+12.5%",
-            icon: "📦",
-          },
-          { label: "REVENUE", value: "₹42.5k", delta: "+8.2%", icon: "💰" },
-        ].map((s) => (
+      {/* Loading State */}
+      {isLoading ? (
+        <>
           <div
-            key={s.label}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 10,
+              marginBottom: 14,
+            }}
+          >
+            {[1, 2].map((i) => (
+              <div
+                key={i}
+                data-ocid="analytics.loading_state"
+                style={{
+                  background: C.card,
+                  borderRadius: 18,
+                  padding: 16,
+                  border: `1px solid ${C.border}`,
+                }}
+              >
+                <div
+                  style={{
+                    height: 12,
+                    background: "#F5EDED",
+                    borderRadius: 6,
+                    marginBottom: 12,
+                    width: "60%",
+                  }}
+                />
+                <div
+                  style={{
+                    height: 28,
+                    background: "#F5EDED",
+                    borderRadius: 8,
+                    width: "80%",
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+          <div
             style={{
               background: C.card,
               borderRadius: 18,
               padding: 16,
+              marginBottom: 14,
+              border: `1px solid ${C.border}`,
+            }}
+          >
+            <div
+              style={{
+                height: 12,
+                background: "#F5EDED",
+                borderRadius: 6,
+                marginBottom: 12,
+                width: "50%",
+              }}
+            />
+            <div
+              style={{
+                height: 24,
+                background: "#F5EDED",
+                borderRadius: 8,
+                width: "70%",
+              }}
+            />
+          </div>
+        </>
+      ) : !hasData ? (
+        /* Empty State */
+        <div
+          data-ocid="analytics.empty_state"
+          style={{
+            background: C.card,
+            borderRadius: 20,
+            padding: "40px 24px",
+            marginBottom: 14,
+            textAlign: "center",
+            boxShadow: "0 2px 10px rgba(139,26,26,0.07)",
+            border: `1px solid ${C.border}`,
+          }}
+        >
+          <div style={{ fontSize: 52, marginBottom: 14 }}>📊</div>
+          <div
+            style={{
+              fontFamily: "'Playfair Display', serif",
+              fontSize: 20,
+              fontWeight: 700,
+              marginBottom: 8,
+            }}
+          >
+            No completed orders yet
+          </div>
+          <div style={{ fontSize: 14, color: C.textMuted }}>
+            Statistics will appear here once orders are paid and completed.
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Stats Grid */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 10,
+              marginBottom: 14,
+            }}
+          >
+            {[
+              {
+                label: "TOTAL ORDERS",
+                value: totalOrders.toString(),
+                icon: "📦",
+              },
+              {
+                label: "REVENUE",
+                value: `₹${totalRevenue.toFixed(2)}`,
+                icon: "💰",
+              },
+            ].map((s) => (
+              <div
+                key={s.label}
+                style={{
+                  background: C.card,
+                  borderRadius: 18,
+                  padding: 16,
+                  boxShadow: "0 2px 10px rgba(139,26,26,0.07)",
+                  border: `1px solid ${C.border}`,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    marginBottom: 8,
+                  }}
+                >
+                  <span style={{ fontSize: 16 }}>{s.icon}</span>
+                  <span
+                    style={{
+                      fontSize: 10,
+                      color: C.textMuted,
+                      fontWeight: 700,
+                      letterSpacing: 0.5,
+                    }}
+                  >
+                    {s.label}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    fontFamily: "'Playfair Display', serif",
+                    fontSize: 22,
+                    fontWeight: 700,
+                  }}
+                >
+                  {s.value}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Most Ordered */}
+          <div
+            style={{
+              background: C.card,
+              borderRadius: 18,
+              padding: 16,
+              marginBottom: 14,
               boxShadow: "0 2px 10px rgba(139,26,26,0.07)",
               border: `1px solid ${C.border}`,
             }}
@@ -251,290 +410,75 @@ export default function AnalyticsPage() {
             <div
               style={{
                 display: "flex",
-                alignItems: "center",
-                gap: 6,
-                marginBottom: 8,
+                justifyContent: "space-between",
+                alignItems: "flex-start",
               }}
             >
-              <span style={{ fontSize: 16 }}>{s.icon}</span>
-              <span
+              <div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: C.textMuted,
+                    fontWeight: 700,
+                    letterSpacing: 0.5,
+                    marginBottom: 4,
+                  }}
+                >
+                  🍴 MOST ORDERED ITEM
+                </div>
+                <div
+                  style={{
+                    fontFamily: "'Playfair Display', serif",
+                    fontSize: 20,
+                    fontWeight: 700,
+                  }}
+                >
+                  {mostOrderedName ?? "No data yet"}
+                </div>
+                {mostOrderedName && (
+                  <div
+                    style={{ color: C.textMuted, fontSize: 13, marginTop: 2 }}
+                  >
+                    {mostOrderedQty} ordered
+                  </div>
+                )}
+              </div>
+              <div
                 style={{
-                  fontSize: 10,
-                  color: C.textMuted,
-                  fontWeight: 700,
-                  letterSpacing: 0.5,
+                  background: "#FDE8E8",
+                  borderRadius: 14,
+                  width: 52,
+                  height: 52,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 26,
                 }}
               >
-                {s.label}
-              </span>
+                🍛
+              </div>
             </div>
             <div
               style={{
-                fontFamily: "'Playfair Display', serif",
-                fontSize: 22,
-                fontWeight: 700,
-              }}
-            >
-              {s.value}
-            </div>
-            <div
-              style={{
-                color: C.green,
-                fontSize: 12,
-                fontWeight: 600,
-                marginTop: 4,
-              }}
-            >
-              ↑ {s.delta}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Most Ordered */}
-      <div
-        style={{
-          background: C.card,
-          borderRadius: 18,
-          padding: 16,
-          marginBottom: 14,
-          boxShadow: "0 2px 10px rgba(139,26,26,0.07)",
-          border: `1px solid ${C.border}`,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-          }}
-        >
-          <div>
-            <div
-              style={{
-                fontSize: 11,
-                color: C.textMuted,
-                fontWeight: 700,
-                letterSpacing: 0.5,
-                marginBottom: 4,
-              }}
-            >
-              🍴 MOST ORDERED TODAY
-            </div>
-            <div
-              style={{
-                fontFamily: "'Playfair Display', serif",
-                fontSize: 20,
-                fontWeight: 700,
-              }}
-            >
-              Butter Chicken
-            </div>
-            <div style={{ color: C.textMuted, fontSize: 13, marginTop: 2 }}>
-              142 orders today
-            </div>
-          </div>
-          <div
-            style={{
-              background: "#FDE8E8",
-              borderRadius: 14,
-              width: 52,
-              height: 52,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 26,
-            }}
-          >
-            🍛
-          </div>
-        </div>
-        <div
-          style={{
-            marginTop: 12,
-            background: "#F5EDED",
-            borderRadius: 10,
-            height: 8,
-          }}
-        >
-          <div
-            style={{
-              background: C.primary,
-              borderRadius: 10,
-              height: 8,
-              width: "78%",
-              transition: "width 0.5s ease",
-            }}
-          />
-        </div>
-      </div>
-
-      {/* Orders Per Hour Chart */}
-      <div
-        style={{
-          background: C.card,
-          borderRadius: 18,
-          padding: 16,
-          marginBottom: 14,
-          boxShadow: "0 2px 10px rgba(139,26,26,0.07)",
-          border: `1px solid ${C.border}`,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 14,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span>⏱️</span>
-            <span
-              style={{
-                fontSize: 11,
-                color: C.textMuted,
-                fontWeight: 700,
-                letterSpacing: 0.5,
-              }}
-            >
-              ORDERS PER HOUR
-            </span>
-          </div>
-          <span
-            style={{
-              fontFamily: "'Playfair Display', serif",
-              fontSize: 18,
-              fontWeight: 700,
-            }}
-          >
-            42{" "}
-            <span style={{ fontSize: 12, color: C.textMuted, fontWeight: 400 }}>
-              avg/hr
-            </span>
-          </span>
-        </div>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-end",
-            gap: 4,
-            height: 80,
-          }}
-        >
-          {BARS.map((b) => (
-            <div
-              key={b.time}
-              style={{
-                flex: 1,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                height: "100%",
-                justifyContent: "flex-end",
+                marginTop: 12,
+                background: "#F5EDED",
+                borderRadius: 10,
+                height: 8,
               }}
             >
               <div
                 style={{
-                  width: "100%",
-                  borderRadius: "4px 4px 0 0",
-                  background: b.val / MAX_BAR > 0.7 ? C.primary : "#F5D0D0",
-                  height: `${(b.val / MAX_BAR) * 100}%`,
-                  minHeight: 4,
-                  transition: "height 0.3s ease",
+                  background: C.primary,
+                  borderRadius: 10,
+                  height: 8,
+                  width: mostOrderedName ? "100%" : "0%",
+                  transition: "width 0.5s ease",
                 }}
               />
             </div>
-          ))}
-        </div>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            marginTop: 6,
-          }}
-        >
-          {["11 AM", "3 PM", "7 PM", "10 PM"].map((t) => (
-            <span key={t} style={{ fontSize: 10, color: C.textMuted }}>
-              {t}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      {/* Recent Performance */}
-      <div style={{ marginBottom: 24 }}>
-        <div
-          style={{
-            fontSize: 11,
-            fontWeight: 700,
-            color: C.textMuted,
-            letterSpacing: 1,
-            marginBottom: 10,
-            textTransform: "uppercase" as const,
-          }}
-        >
-          Recent Performance
-        </div>
-        {[
-          {
-            iconBg: "#E8F8EF",
-            iconColor: C.green,
-            icon: "↑",
-            title: "Dinner Peak",
-            desc: "Service efficiency increased by 15%",
-            time: "2h ago",
-          },
-          {
-            iconBg: "#FEF3E8",
-            iconColor: "#E67E22",
-            icon: "📦",
-            title: "Inventory Alert",
-            desc: "Butter Chicken stock is running low",
-            time: "5h ago",
-          },
-        ].map((p) => (
-          <div
-            key={p.title}
-            style={{
-              background: C.card,
-              borderRadius: 16,
-              padding: "14px",
-              marginBottom: 10,
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              boxShadow: "0 1px 6px rgba(139,26,26,0.06)",
-              border: `1px solid ${C.border}`,
-            }}
-          >
-            <div
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: "50%",
-                background: p.iconBg,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 18,
-                color: p.iconColor,
-                fontWeight: 700,
-                flexShrink: 0,
-              }}
-            >
-              {p.icon}
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: 14 }}>{p.title}</div>
-              <div style={{ fontSize: 12, color: C.textMuted }}>{p.desc}</div>
-            </div>
-            <span style={{ fontSize: 12, color: C.textMuted, flexShrink: 0 }}>
-              {p.time}
-            </span>
           </div>
-        ))}
-      </div>
+        </>
+      )}
 
       {/* Footer */}
       <footer style={{ textAlign: "center", paddingBottom: 8 }}>

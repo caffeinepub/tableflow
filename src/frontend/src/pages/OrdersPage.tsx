@@ -5,7 +5,6 @@ import ItemSelector from "../components/ItemSelector";
 import {
   useAddItemsToOrder,
   useCreateOrder,
-  useMarkAllServed,
   useMenuItems,
   useOrders,
   useUpdateOrderItemStatus,
@@ -30,57 +29,158 @@ const C = {
   yellowBorder: "#F9E79F",
 };
 
-function StatusBadge({
+// Slide toggle for item status: Preparing ↔ Served
+function StatusSlider({
   status,
-  onClick,
-}: { status: string; onClick?: () => void }) {
-  const isPreparing = status === "Preparing";
+  onToggle,
+}: { status: string; onToggle: () => void }) {
+  const isServed = status === "Served";
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={onToggle}
+      aria-label={`Status: ${status}. Tap to toggle.`}
       style={{
-        background: isPreparing ? C.orangeBg : C.greenBg,
-        color: isPreparing ? C.orange : C.green,
-        border: `1px solid ${isPreparing ? C.orangeBorder : C.greenBorder}`,
-        borderRadius: 20,
-        padding: "4px 10px",
-        fontSize: 11,
-        fontWeight: 700,
-        letterSpacing: 0.5,
-        textTransform: "uppercase" as const,
-        cursor: onClick ? "pointer" : "default",
-        whiteSpace: "nowrap" as const,
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        background: "none",
+        border: "none",
+        padding: 0,
+        cursor: "pointer",
+        flexShrink: 0,
       }}
     >
-      {status}
+      <span
+        style={{
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: 0.5,
+          color: isServed ? C.green : C.orange,
+          textTransform: "uppercase",
+          minWidth: 64,
+          textAlign: "right",
+        }}
+      >
+        {status}
+      </span>
+      {/* Track */}
+      <div
+        style={{
+          position: "relative",
+          width: 44,
+          height: 24,
+          borderRadius: 12,
+          background: isServed ? C.green : "#ddd",
+          transition: "background 0.25s",
+          flexShrink: 0,
+        }}
+      >
+        {/* Knob */}
+        <div
+          style={{
+            position: "absolute",
+            top: 3,
+            left: isServed ? 23 : 3,
+            width: 18,
+            height: 18,
+            borderRadius: "50%",
+            background: "#fff",
+            boxShadow: "0 1px 4px rgba(0,0,0,0.18)",
+            transition: "left 0.25s",
+          }}
+        />
+      </div>
     </button>
   );
 }
 
-function PaymentBadge({
-  status,
-  onClick,
-}: { status: string; onClick?: () => void }) {
-  const isPaid = status === "Paid";
+// Slide toggle for payment: Yet to Pay ↔ Paid
+function PaymentSlider({
+  paymentStatus,
+  allServed,
+  onToggle,
+}: { paymentStatus: string; allServed: boolean; onToggle: () => void }) {
+  const isPaid = paymentStatus === "Paid";
+  const disabled = !allServed && !isPaid;
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <div
       style={{
-        background: isPaid ? C.greenBg : C.yellowBg,
-        color: isPaid ? C.green : C.yellow,
-        border: `1px solid ${isPaid ? C.greenBorder : C.yellowBorder}`,
-        borderRadius: 20,
-        padding: "5px 12px",
-        fontSize: 12,
-        fontWeight: 600,
-        cursor: "pointer",
-        whiteSpace: "nowrap" as const,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-end",
+        gap: 4,
       }}
     >
-      {status}
-    </button>
+      <button
+        type="button"
+        onClick={disabled ? undefined : onToggle}
+        aria-label={`Payment: ${paymentStatus}. ${disabled ? "Serve all items first." : "Tap to toggle."}`}
+        aria-disabled={disabled}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          background: "none",
+          border: "none",
+          padding: 0,
+          cursor: disabled ? "not-allowed" : "pointer",
+          opacity: disabled ? 0.55 : 1,
+          transition: "opacity 0.2s",
+        }}
+      >
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: 0.5,
+            color: isPaid ? C.green : C.yellow,
+            textTransform: "uppercase",
+          }}
+        >
+          {isPaid ? "PAID" : "UNPAID"}
+        </span>
+        {/* Track */}
+        <div
+          style={{
+            position: "relative",
+            width: 44,
+            height: 24,
+            borderRadius: 12,
+            background: isPaid ? C.green : disabled ? "#ccc" : C.yellow,
+            transition: "background 0.25s",
+            flexShrink: 0,
+          }}
+        >
+          {/* Knob */}
+          <div
+            style={{
+              position: "absolute",
+              top: 3,
+              left: isPaid ? 23 : 3,
+              width: 18,
+              height: 18,
+              borderRadius: "50%",
+              background: "#fff",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.18)",
+              transition: "left 0.25s",
+            }}
+          />
+        </div>
+      </button>
+      {disabled && (
+        <span
+          style={{
+            fontSize: 10,
+            color: C.textMuted,
+            textAlign: "right",
+            maxWidth: 140,
+          }}
+        >
+          Serve all items to enable payment
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -90,14 +190,12 @@ function OrderCard({
   onAddItems,
   onToggleStatus,
   onTogglePayment,
-  onMarkServed,
 }: {
   order: Order;
   index: number;
   onAddItems: (order: Order) => void;
   onToggleStatus: (orderId: bigint, itemIdx: number) => void;
   onTogglePayment: (orderId: bigint) => void;
-  onMarkServed: (orderId: bigint) => void;
 }) {
   const total = order.items.reduce((s, i) => s + i.price * Number(i.qty), 0);
   const allServed = order.items.every((i) => i.status === "Served");
@@ -138,9 +236,10 @@ function OrderCard({
             ORDER #{order.id.toString()} • {order.time}
           </div>
         </div>
-        <PaymentBadge
-          status={order.paymentStatus}
-          onClick={() => onTogglePayment(order.id)}
+        <PaymentSlider
+          paymentStatus={order.paymentStatus}
+          allServed={allServed}
+          onToggle={() => onTogglePayment(order.id)}
         />
       </div>
 
@@ -160,9 +259,9 @@ function OrderCard({
           <span style={{ fontSize: 14, color: C.text, flex: 1 }}>
             {item.qty.toString()}× {item.name}
           </span>
-          <StatusBadge
+          <StatusSlider
             status={item.status}
-            onClick={() => onToggleStatus(order.id, idx)}
+            onToggle={() => onToggleStatus(order.id, idx)}
           />
         </div>
       ))}
@@ -191,44 +290,124 @@ function OrderCard({
             ₹{total.toLocaleString("en-IN")}.00
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            type="button"
-            data-ocid="order.add_items.button"
-            onClick={() => onAddItems(order)}
+        <button
+          type="button"
+          data-ocid="order.add_items.button"
+          onClick={() => onAddItems(order)}
+          style={{
+            background: "#FDE8E8",
+            color: C.primary,
+            border: "none",
+            borderRadius: 14,
+            padding: "10px 16px",
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: "pointer",
+            minHeight: 44,
+          }}
+        >
+          Add Items
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CompletedOrderCard({ order, index }: { order: Order; index: number }) {
+  const total = order.items.reduce((s, i) => s + i.price * Number(i.qty), 0);
+  return (
+    <div
+      data-ocid={`completed.item.${index}`}
+      style={{
+        background: C.card,
+        borderRadius: 20,
+        padding: "16px 18px",
+        boxShadow: "0 2px 8px rgba(39,174,96,0.08)",
+        border: `1px solid ${C.greenBorder}`,
+        marginBottom: 14,
+        opacity: 0.9,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 6,
+        }}
+      >
+        <div>
+          <div
             style={{
-              background: "#FDE8E8",
-              color: C.primary,
-              border: "none",
-              borderRadius: 14,
-              padding: "10px 16px",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: "pointer",
-              minHeight: 44,
+              fontFamily: "'Playfair Display', serif",
+              fontSize: 18,
+              fontWeight: 700,
+              color: C.text,
             }}
           >
-            Add Items
-          </button>
-          <button
-            type="button"
-            data-ocid="order.mark_served.button"
-            onClick={() => !allServed && onMarkServed(order.id)}
-            style={{
-              background: allServed ? "#ccc" : C.primary,
-              color: "#fff",
-              border: "none",
-              borderRadius: 14,
-              padding: "10px 16px",
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: allServed ? "default" : "pointer",
-              minHeight: 44,
-            }}
-          >
-            {allServed ? "All Served" : "Mark Served"}
-          </button>
+            Table {order.tableNumber.toString()}
+          </div>
+          <div style={{ fontSize: 12, color: C.textMuted, marginTop: 2 }}>
+            ORDER #{order.id.toString()} • {order.time}
+          </div>
         </div>
+        <span
+          style={{
+            background: C.greenBg,
+            color: C.green,
+            border: `1px solid ${C.greenBorder}`,
+            borderRadius: 20,
+            padding: "4px 12px",
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: 0.5,
+            textTransform: "uppercase" as const,
+          }}
+        >
+          PAID
+        </span>
+      </div>
+      <div style={{ borderTop: `1px solid ${C.border}`, margin: "8px 0" }} />
+      {order.items.map((item) => (
+        <div
+          key={String(item.menuId)}
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            fontSize: 13,
+            color: C.textMuted,
+            marginBottom: 4,
+          }}
+        >
+          <span>
+            {item.qty.toString()}× {item.name}
+          </span>
+          <span>
+            ₹{(item.price * Number(item.qty)).toLocaleString("en-IN")}
+          </span>
+        </div>
+      ))}
+      <div
+        style={{ borderTop: `1px solid ${C.border}`, margin: "8px 0 4px" }}
+      />
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+        <span style={{ fontSize: 12, color: C.textMuted }}>Total</span>
+        <span
+          style={{
+            fontSize: 18,
+            fontWeight: 700,
+            color: C.green,
+            fontFamily: "'Playfair Display', serif",
+          }}
+        >
+          ₹{total.toLocaleString("en-IN")}.00
+        </span>
       </div>
     </div>
   );
@@ -243,17 +422,38 @@ export default function OrdersPage() {
   const addItemsToOrder = useAddItemsToOrder();
   const updateItemStatus = useUpdateOrderItemStatus();
   const updatePayment = useUpdatePaymentStatus();
-  const markAllServed = useMarkAllServed();
 
   const [screen, setScreen] = useState<Screen>("list");
-  const [tab, setTab] = useState<"Active" | "Completed" | "Cancelled">(
-    "Active",
-  );
+  const [tab, setTab] = useState<"Active" | "Completed">("Active");
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [tableNum, setTableNum] = useState("");
   const [newOrderStep, setNewOrderStep] = useState(1);
+  const [recentIds, setRecentIds] = useState<bigint[]>([]);
 
   const isLoading = ordersLoading || menuLoading;
+
+  const bumpRecent = (id: bigint) => {
+    setRecentIds((prev) => [id, ...prev.filter((x) => x !== id)]);
+  };
+
+  // Sort: recentIds first, then by id descending
+  const sortOrders = (list: Order[]) => {
+    return [...list].sort((a, b) => {
+      const ai = recentIds.indexOf(a.id);
+      const bi = recentIds.indexOf(b.id);
+      if (ai !== -1 && bi !== -1) return ai - bi;
+      if (ai !== -1) return -1;
+      if (bi !== -1) return 1;
+      return Number(b.id - a.id);
+    });
+  };
+
+  const activeOrders = sortOrders(
+    orders.filter((o) => o.paymentStatus !== "Paid"),
+  );
+  const completedOrders = sortOrders(
+    orders.filter((o) => o.paymentStatus === "Paid"),
+  );
 
   const handleNewOrder = async (quantities: Record<number, number>) => {
     const items: OrderItem[] = menuItems
@@ -266,7 +466,7 @@ export default function OrdersPage() {
         status: "Preparing",
       }));
     try {
-      await createOrder.mutateAsync({
+      const newId = await createOrder.mutateAsync({
         tableNumber: BigInt(tableNum),
         time: new Date().toLocaleTimeString([], {
           hour: "2-digit",
@@ -274,6 +474,7 @@ export default function OrdersPage() {
         }),
         items,
       });
+      if (typeof newId === "bigint") bumpRecent(newId);
       toast.success("Order sent to kitchen!");
       setScreen("list");
       setTableNum("");
@@ -299,6 +500,7 @@ export default function OrdersPage() {
         orderId: editingOrder.id,
         items: newItems,
       });
+      bumpRecent(editingOrder.id);
       toast.success("Items added!");
       setScreen("list");
       setEditingOrder(null);
@@ -318,6 +520,7 @@ export default function OrdersPage() {
         itemIndex: BigInt(itemIdx),
         status: newStatus,
       });
+      bumpRecent(orderId);
     } catch {
       toast.error("Failed to update status");
     }
@@ -326,24 +529,22 @@ export default function OrdersPage() {
   const handleTogglePayment = async (orderId: bigint) => {
     const order = orders.find((o) => o.id === orderId);
     if (!order) return;
+    const allServed = order.items.every((i) => i.status === "Served");
+    if (!allServed) return;
     const newStatus = order.paymentStatus === "Paid" ? "Yet to Pay" : "Paid";
     try {
       await updatePayment.mutateAsync({ orderId, paymentStatus: newStatus });
+      bumpRecent(orderId);
+      if (newStatus === "Paid") {
+        toast.success("Payment received! Order completed.");
+        setTab("Completed");
+      }
     } catch {
       toast.error("Failed to update payment");
     }
   };
 
-  const handleMarkServed = async (orderId: bigint) => {
-    try {
-      await markAllServed.mutateAsync(orderId);
-      toast.success("All items marked as served!");
-    } catch {
-      toast.error("Failed to mark as served");
-    }
-  };
-
-  // New Order — Step 1: Table number
+  // New Order — Step 1
   if (screen === "new" && newOrderStep === 1) {
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -460,7 +661,7 @@ export default function OrdersPage() {
     );
   }
 
-  // New Order — Step 2: Item selection
+  // New Order — Step 2
   if (screen === "new" && newOrderStep === 2) {
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -566,7 +767,9 @@ export default function OrdersPage() {
     );
   }
 
-  // Main orders list
+  // Main list
+  const displayedOrders = tab === "Active" ? activeOrders : completedOrders;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Header */}
@@ -622,7 +825,7 @@ export default function OrdersPage() {
           borderBottom: `1px solid ${C.border}`,
         }}
       >
-        {(["Active", "Completed", "Cancelled"] as const).map((t) => (
+        {(["Active", "Completed"] as const).map((t) => (
           <button
             type="button"
             key={t}
@@ -639,9 +842,28 @@ export default function OrdersPage() {
               cursor: "pointer",
               fontSize: 14,
               minHeight: 44,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
             }}
           >
             {t}
+            {t === "Active" && activeOrders.length > 0 && (
+              <span
+                style={{
+                  background: C.primary,
+                  color: "#fff",
+                  borderRadius: 10,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: "1px 7px",
+                  minWidth: 20,
+                  textAlign: "center",
+                }}
+              >
+                {activeOrders.length}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -652,13 +874,7 @@ export default function OrdersPage() {
         style={{ flex: 1, overflowY: "auto", padding: "14px 16px" }}
       >
         {isLoading ? (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-            }}
-          >
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {[1, 2, 3].map((i) => (
               <div
                 key={i}
@@ -693,34 +909,33 @@ export default function OrdersPage() {
                     height: 14,
                     background: "#F5ECEC",
                     borderRadius: 6,
-                    marginBottom: 8,
                     width: "60%",
-                  }}
-                />
-                <div
-                  style={{
-                    height: 14,
-                    background: "#F5ECEC",
-                    borderRadius: 6,
-                    width: "50%",
                   }}
                 />
               </div>
             ))}
           </div>
-        ) : orders.length === 0 ? (
+        ) : displayedOrders.length === 0 ? (
           <div
-            data-ocid="orders.empty_state"
+            data-ocid={`orders.${tab.toLowerCase()}.empty_state`}
             style={{ textAlign: "center", color: C.textMuted, marginTop: 60 }}
           >
-            <div style={{ fontSize: 52, marginBottom: 14 }}>📋</div>
-            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 6 }}>
-              No active orders
+            <div style={{ fontSize: 52, marginBottom: 14 }}>
+              {tab === "Active" ? "📋" : "✅"}
             </div>
-            <div style={{ fontSize: 13 }}>Tap + New Order to get started</div>
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 6 }}>
+              {tab === "Active"
+                ? "No active orders"
+                : "No completed orders yet"}
+            </div>
+            <div style={{ fontSize: 13 }}>
+              {tab === "Active"
+                ? "Tap + New Order to get started"
+                : "Completed orders will appear here"}
+            </div>
           </div>
-        ) : (
-          orders.map((order, idx) => (
+        ) : tab === "Active" ? (
+          displayedOrders.map((order, idx) => (
             <OrderCard
               key={order.id.toString()}
               order={order}
@@ -731,7 +946,14 @@ export default function OrdersPage() {
               }}
               onToggleStatus={handleToggleStatus}
               onTogglePayment={handleTogglePayment}
-              onMarkServed={handleMarkServed}
+            />
+          ))
+        ) : (
+          displayedOrders.map((order, idx) => (
+            <CompletedOrderCard
+              key={order.id.toString()}
+              order={order}
+              index={idx + 1}
             />
           ))
         )}

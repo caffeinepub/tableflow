@@ -4,9 +4,9 @@ set -e
 CALM_MOC_PATH="/home/ubuntu/.motoko/moc/0.16.3-implicits-26/bin/moc"
 CALM_MOTOKO_CORE="/home/ubuntu/.motoko/core/implicits-20"
 
-# Remove any prior src to avoid nested src/src
+# Copy entire workspace to temp dir to have package.json and scripts alongside src
 BUILD_DIR=$(mktemp -d)
-cp -rf ./src/. "$BUILD_DIR/"
+cp -rf . "$BUILD_DIR/"
 cd "$BUILD_DIR"
 
 ls -la
